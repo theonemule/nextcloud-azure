@@ -42,7 +42,7 @@ apt-get upgrade -y
 apt-get install -y  php8.1 php8.1-cli php8.1-common php8.1-imap php8.1-redis php8.1-snmp php8.1-xml php8.1-zip php8.1-mbstring php8.1-curl php8.1-gd php8.1-mysql apache2 mariadb-server certbot nfs-common python3-certbot-apache unzip
 
 #Create the database and user
-DBPASSWORD = $(openssl rand -base64 14)
+DBPASSWORD=$(openssl rand -base64 14)
 mysql -e "CREATE DATABASE nextcloud;GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost' IDENTIFIED BY '$DBPASSWORD';FLUSH PRIVILEGES;"
 
 #Mount the file storage
@@ -59,7 +59,7 @@ chown -R www-data:www-data nextcloud
 cd nextcloud
 
 #Install Nextcloud
-sudo -u www-data php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$NCUSER" --admin-pass "$NCPASSWORD" --data-dir /mnt/files
+sudo -u www-data php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USER" --admin-pass "$PASSWORD" --data-dir /mnt/files
 sed -i "s/0 => 'localhost',/0 => '$HOSTNAME',/g" ./config/config.php
 sed -i "s/  'overwrite.cli.url' => 'https:\/\/localhost',/  'overwrite.cli.url' => 'http:\/\/$HOSTNAME',/g" ./config/config.php
 
