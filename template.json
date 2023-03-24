@@ -1,0 +1,350 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Username for the Virtual Machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Virtual Machine."
+      }
+    },
+    "sslEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address for Let's Encrypt."
+      }
+    },	
+    "dnsNameForPublicIP": {
+      "type": "string",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    }
+  },
+  "variables": {
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id),'storage')]",
+    "containerName": "files",
+	"blobStorageAccountPrivateEndpointName": "nextcloudPE",
+	"blobStorageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+	"blobPublicDNSZoneForwarder": "[concat('.blob.', environment().suffixes.storage)]",
+	"blobPrivateDnsZoneName": "[concat('privatelink', variables('blobPublicDNSZoneForwarder'))]",
+	"blobPrivateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('blobPrivateDnsZoneName'))]",
+	"blobServicePrimaryEndpoint": "[concat(variables('storageAccountName'), variables('blobPublicDNSZoneForwarder'))]",
+	"blobStorageAccountPrivateEndpointId": "[resourceId('Microsoft.Network/privateEndpoints', variables('blobStorageAccountPrivateEndpointName'))]",
+	"blobStorageAccountPrivateEndpointGroupName": "blob",
+	"blobPrivateDnsZoneGroup": "[concat(variables('blobStorageAccountPrivateEndpointName'),'/', variables('blobStorageAccountPrivateEndpointGroupName'), 'PrivateDnsZoneGroup')]",
+    "imagePublisher": "Canonical",
+    "imageOffer": "0001-com-ubuntu-server-jammy",
+    "OSDiskName": "nextcloud-vhd",
+    "imageSKU": "22_04-lts-gen2",
+    "nicName": "nextcloudNic",
+    "addressPrefix": "10.0.0.0/16",
+    "subnetName": "nextcloudSubnet",
+    "subnetPrefix": "10.0.0.0/24",
+    "storageAccountType": "Standard_LRS",
+    "publicIPAddressName": "nextcloudPublicIP",
+    "publicIPAddressType": "Dynamic",
+    "vmStorageAccountContainerName": "vhds",
+    "vmName": "nextcloudVM",
+    "vmSize": "Standard_B1s",
+    "virtualNetworkName": "nextcloudVNET",
+    "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
+    "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
+    "apiVersion": "2015-06-15"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccountName')]",
+      "apiVersion": "2019-06-01",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+	  "properties": {
+		"allowBlobPublicAccess": false,
+		"isNfsV3Enabled": true,
+		"isHnsEnabled": true,
+		"networkAcls": {
+			"defaultAction": "deny"
+		}		
+
+	  }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2022-05-01",
+      "name": "[format('{0}/default/{1}', variables('storageAccountName'), variables('containerName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },	
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('publicIPAddressName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsNameForPublicIP')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('virtualNetworkName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('subnetPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[variables('nicName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
+        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+		"[concat('Microsoft.Network/networkSecurityGroups/', 'nextcloud-nsg')]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+	{
+		"name": "['nextcloud-nsg']",
+		"type": "Microsoft.Network/networkSecurityGroups",
+		"apiVersion": "2016-09-01",
+		"location": "[resourceGroup().location]",
+		"properties": {
+			"securityRules": [
+				{
+					"name": "default-allow-ssh",
+					"properties": {
+						"priority": 1000,
+						"sourceAddressPrefix": "*",
+						"protocol": "TCP",
+						"destinationPortRange": "22",
+						"access": "Allow",
+						"direction": "Inbound",
+						"sourcePortRange": "*",
+						"destinationAddressPrefix": "*"
+					}
+				},
+				{
+					"name": "default-allow-http",
+					"properties": {
+						"priority": 1100,
+						"sourceAddressPrefix": "*",
+						"protocol": "TCP",
+						"destinationPortRange": "80",
+						"access": "Allow",
+						"direction": "Inbound",
+						"sourcePortRange": "*",
+						"destinationAddressPrefix": "*"
+					}
+				},
+				{
+					"name": "default-allow-https",
+					"properties": {
+						"priority": 1200,
+						"sourceAddressPrefix": "*",
+						"protocol": "TCP",
+						"destinationPortRange": "443",
+						"access": "Allow",
+						"direction": "Inbound",
+						"sourcePortRange": "*",
+						"destinationAddressPrefix": "*"
+					}
+				}
+			]
+		}
+	},
+    {
+      "apiVersion": "2016-04-30-preview",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('vmName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('imagePublisher')]",
+            "offer": "[variables('imageOffer')]",
+            "sku": "[variables('imageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+		"managedDisk": {
+		    "storageAccountType": "Standard_LRS"
+		}		  
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": "true",
+            "storageUri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), variables('apiVersion')).primaryEndpoints.blob)]"
+          }
+        }
+      }
+    },
+	{
+		"type": "Microsoft.Compute/virtualMachines/extensions",
+		"name": "[concat(variables('vmName'),'/', 'jitsi-setup')]",
+		"apiVersion": "['2015-06-15']",
+		"location": "[resourceGroup().location]",
+		"dependsOn": [
+			"[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+		],
+		"properties": {
+			"publisher": "Microsoft.Azure.Extensions",
+			"type": "CustomScript",
+			"typeHandlerVersion": "2.0",
+			"autoUpgradeMinorVersion": true,
+			"settings": {
+				"fileUris": "[split('https://raw.githubusercontent.com/theonemule/nextcloud-azure/main/install.sh', ' ')]",
+				"commandToExecute": "[concat('bash install.sh --hostname=', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com --password=', parameters('adminPassword'), ' --username=', parameters('adminUsername'), ' --email=',  parameters('sslEmail'), " --storageaccount=", variables['storageAccountName'], " --container=", variables['containerName'])]"
+			}
+		}
+	},	
+	{
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2018-09-01",
+      "name": "[variables('blobPrivateDnsZoneName')]",
+      "location": "global",
+      "properties": {
+        "maxNumberOfRecordSets": 25000,
+        "maxNumberOfVirtualNetworkLinks": 1000,
+        "maxNumberOfVirtualNetworkLinksWithRegistration": 100
+      }
+    },
+	{
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2018-09-01",
+      "name": "[concat(variables('blobPrivateDnsZoneName'), '/link_to_', toLower(variables('virtualNetworkName')))]",
+      "location": "global",
+      "dependsOn": [
+        "[variables('blobPrivateDnsZoneId')]",
+        "[variables('vnetId')]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[variables('vnetId')]"
+        }
+      }
+    },
+	{
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2020-04-01",
+      "name": "[variables('blobStorageAccountPrivateEndpointName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('vnetId')]",
+        "[variables('blobStorageAccountId')]"
+      ],
+      "properties": {
+        "privateLinkServiceConnections": [
+          {
+            "name": "[variables('blobStorageAccountPrivateEndpointName')]",
+            "properties": {
+              "privateLinkServiceId": "[variables('blobStorageAccountId')]",
+              "groupIds": [
+                "[variables('blobStorageAccountPrivateEndpointGroupName')]"
+              ]
+            }
+          }
+        ],
+        "subnet": {
+          "id": "[variables('subnetRef')]"
+        },
+        "customDnsConfigs": [
+          {
+            "fqdn": "[concat(variables('storageAccountName'), variables('blobPublicDNSZoneForwarder'))]"
+          }
+        ]
+      }
+    },
+	{
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2020-03-01",
+      "name": "[variables('blobPrivateDnsZoneGroup')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('blobPrivateDnsZoneId')]",
+        "[variables('blobStorageAccountPrivateEndpointId')]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "dnsConfig",
+            "properties": {
+              "privateDnsZoneId": "[variables('blobPrivateDnsZoneId')]"
+            }
+          }
+        ]
+      }
+    }	
+	
+  ],
+      "outputs": {
+        "httpSite": {
+            "type": "string",
+            "value": "[concat('Browse to: ', parameters('dnsNameForPublicIP'), '.', resourceGroup().location, '.cloudapp.azure.com and logon with u:admin p:', parameters('adminPassword'))]"
+        }
+    }
+}
