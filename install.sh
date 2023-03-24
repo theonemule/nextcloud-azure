@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export DEBIAN_FRONTEND=noninteractive
+
 # defaults 
 HOSTNAME="localhost"
 USERNAME="admin"
