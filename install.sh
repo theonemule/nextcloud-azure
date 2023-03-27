@@ -51,19 +51,22 @@ mysql -e "CREATE DATABASE nextcloud;GRANT ALL PRIVILEGES ON nextcloud.* TO 'next
 mkdir -p /mnt/files
 echo "$STORAGEACCOUNT.privatelink.blob.core.windows.net:/$STORAGEACCOUNT/$CONTAINER  /mnt/files    nfs defaults,sec=sys,vers=3,nolock,proto=tcp,nofail    0 0" >> /etc/fstab 
 mount /mnt/files
-chown -R www-data:www-data /mnt/files
+
 
 #Download Nextcloud
 cd /var/www/html
 wget https://download.nextcloud.com/server/releases/nextcloud-24.0.1.zip
 unzip nextcloud-24.0.1.zip
-chown -R www-data:www-data nextcloud
 cd nextcloud
 
 #Install Nextcloud
 sudo -u www-data php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USER" --admin-pass "$PASSWORD" --data-dir /mnt/files
 sed -i "s/0 => 'localhost',/0 => '$HOSTNAME',/g" ./config/config.php
 sed -i "s/  'overwrite.cli.url' => 'https:\/\/localhost',/  'overwrite.cli.url' => 'http:\/\/$HOSTNAME',/g" ./config/config.php
+
+cd ..
+chown -R www-data:www-data nextcloud
+chown -R www-data:www-data /mnt/files
 
 #Configure Apache
 tee -a /etc/apache2/sites-available/nextcloud.conf << EOF
