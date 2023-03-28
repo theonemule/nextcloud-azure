@@ -57,6 +57,7 @@ mount /mnt/files
 cd /var/www/html
 wget https://download.nextcloud.com/server/releases/nextcloud-24.0.1.zip
 unzip nextcloud-24.0.1.zip
+chown -R root:root nextcloud
 cd nextcloud
 
 #Install Nextcloud
