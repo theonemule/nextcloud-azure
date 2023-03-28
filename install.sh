@@ -61,7 +61,7 @@ chown -R root:root nextcloud
 cd nextcloud
 
 #Install Nextcloud
-php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USER" --admin-pass "$PASSWORD" --data-dir /mnt/files
+php occ  maintenance:install --database "mysql" --database-name "nextcloud"  --database-user "nextcloud" --database-pass "$DBPASSWORD" --admin-user "$USERNAME" --admin-pass "$PASSWORD" --data-dir /mnt/files
 sed -i "s/0 => 'localhost',/0 => '$HOSTNAME',/g" ./config/config.php
 sed -i "s/  'overwrite.cli.url' => 'https:\/\/localhost',/  'overwrite.cli.url' => 'http:\/\/$HOSTNAME',/g" ./config/config.php
 
