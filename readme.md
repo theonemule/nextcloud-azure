@@ -10,6 +10,8 @@ Historically, you could use Blob Storage with Nextcloud using Blob Fuse. Microso
 
 I built these automation scripts to make setting this up on Azure easy. One is an ARM template that deploys a VM, a Storage Account with Blob Storage with NFS enabled, and the private connectivity between the VM and the Storage Account using VNets, Private Endpoints, etc. The shell does three things. First, it mounts the Storage Account into the VM. Second, it sets up Nextcloud and its dependencies on the VM (Apache, MariaDB, PHP, etc.) Third, the script sets up a Let’s Encrypt certificate for the VM.  You can click on the button below to deploy the script using the Azure Portal.
 
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ftheonemule%2Fnextcloud-azure%2Fmain%2Ftemplate.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
+
 You’ll need a few parameters for this to work:
 
 * User Name: The username  for the VM and for the Nextcloud instance.
