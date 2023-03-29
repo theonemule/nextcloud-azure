@@ -8,6 +8,8 @@ Setting up Nextcloud on Azure is straightforward if you only use a VM. There are
 
 Historically, you could use Blob Storage with Nextcloud using Blob Fuse. Microsoft more recently introduced NFS for Azure Blob Storage, a much more performant solution for mounting Blob Storage as a part of the file system. NFS, however, has very little inherent security on Azure. Anyone with the endpoint can mount and access the file share, so making any NFS shares on Azure Blob storage a private endpoint and using firewalls built into Azure Storage Accounts and NSGs for VNets to prevent unwanted connections to the private endpoint.
 
+![Diagram](diagram.png)
+
 I built these automation scripts to make setting this up on Azure easy. One is an ARM template that deploys a VM, a Storage Account with Blob Storage with NFS enabled, and the private connectivity between the VM and the Storage Account using VNets, Private Endpoints, etc. The shell does three things. First, it mounts the Storage Account into the VM. Second, it sets up Nextcloud and its dependencies on the VM (Apache, MariaDB, PHP, etc.) Third, the script sets up a Let’s Encrypt certificate for the VM.  You can click on the button below to deploy the script using the Azure Portal.
 
 You’ll need a few parameters for this to work:
